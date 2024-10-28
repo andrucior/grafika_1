@@ -2,10 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace gk_1
 {
+    [Serializable]
     public class MyPoint
     {
         // Properties for X and Y coordinates.
@@ -30,6 +33,10 @@ namespace gk_1
         {
             this.Point = point;
         }
-        public MyPoint() { }        
+        public MyPoint() { }  
+        public string Serialize()
+        {
+            return JsonSerializer.Serialize(this);
+        }
     }
 }

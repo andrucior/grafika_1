@@ -1,17 +1,9 @@
+using System.Text.Json;
+
 namespace gk_1
 {
     public partial class Form1 : Form
     {
-        /*
-            Architektura:
-                -klasy: punkt, krawêdŸ (pozioma, pionowa, krzywa), wielok¹t
-                -wielok¹t: lista krawêdzi 
-            UX/UI:
-                -predefiniowana scena wstêpna
-            Research:
-                -G0, G1, algorytm Bresenhama, algorytm przyrostowy
-         
-         */
         public Form1()
         {
             InitializeComponent();
@@ -50,6 +42,7 @@ namespace gk_1
             else
             {
                 customPanel1.DropBezier(customPanel1.hoveredEdge);
+                customPanel1.bezier = false;
             }
         }
 
@@ -184,7 +177,7 @@ namespace gk_1
         {
             var tmp = customPanel1.points.Find(pt => pt.Point == customPanel1.hoveredPoint);
             if (tmp == null) MessageBox.Show("Choose point first!");
-            if (!tmp.G1)
+            if (!tmp.G1 && !tmp.C1)
                 customPanel1.AddG1Constraint(tmp);
             else
                 customPanel1.RemoveC1Constraint(tmp);
@@ -194,7 +187,7 @@ namespace gk_1
         {
             var tmp = customPanel1.points.Find(pt => pt.Point == customPanel1.hoveredPoint);
             if (tmp == null) MessageBox.Show("Choose point first!");
-            if (!tmp.C1)
+            if (!tmp.C1 && !tmp.G1)
                 customPanel1.AddC1Constraint(tmp);
             else
                 customPanel1.RemoveC1Constraint(tmp);
@@ -216,5 +209,102 @@ namespace gk_1
         {
             Help.ShowHelp(this, Directory.GetCurrentDirectory() + "\\algorithm.html");
         }
+
+        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void saveToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var fs = new StreamWriter(Directory.GetCurrentDirectory() + "\\polygon.json");
+            fs.Write(customPanel1.Serialize());
+            fs.Close();
+            MessageBox.Show("Polygon saved successfully!");
+        }
+
+        private void loadToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.InitialDirectory = "c:\\";
+                openFileDialog.Filter = "json files (*.json)|";
+                openFileDialog.FilterIndex = 2;
+                openFileDialog.RestoreDirectory = true;
+                string? filePath;
+                string? fileContent;
+
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    //Get the path of specified file
+                    filePath = openFileDialog.FileName;
+                    usunWielokatToolStripMenuItem_Click(sender, e);
+
+                    //Read the contents of the file into a stream
+                    var fileStream = openFileDialog.OpenFile();
+
+                    using (StreamReader reader = new StreamReader(fileStream))
+                    {
+                        while (!reader.EndOfStream)
+                        {
+                            fileContent = reader.ReadLine();
+
+                            MyPoint? point;
+                            var tmp = fileContent.Split(":");
+                            var options = new JsonSerializerOptions { IncludeFields = true };
+                            if (tmp != null)
+                            {
+                                if (tmp[0] == "{\"First\"")
+                                {
+                                    SkewedEdge? edge = JsonSerializer.Deserialize<SkewedEdge>(fileContent, options);
+                                    customPanel1.edges.Add(edge);
+                                    MyPoint? pt = customPanel1.points.Find(pt => pt.Point.Value == edge.Start.Point);
+
+                                    if (pt != null)
+                                    {
+                                        edge.Start = pt;
+                                    }
+                                    else
+                                    {
+                                        customPanel1.points.Add(edge.Start);
+                                    }
+                                    pt = customPanel1.points.Find(pt => pt.Point.Value == edge.End.Point);
+
+                                    if (pt != null)
+                                    {
+                                        edge.End = pt;
+                                    }
+                                    else
+                                    {
+                                        customPanel1.points.Add(edge.End);
+                                    }
+
+                                    customPanel1.toCurved = edge;
+                                    customPanel1.UpdateFirstControlPoint((Point)edge.First.Point);
+                                    customPanel1.UpdateSecondControlPoint((Point)edge.Second.Point);
+
+                                }
+                            }
+                            else if (tmp[0] == "{\"Start\"")
+                            {
+                                Edge? edge;
+                                edge = JsonSerializer.Deserialize<Edge>(fileContent, options);
+                                customPanel1.edges.Add(edge);
+                                if (customPanel1.points.Find(pt => pt.Point.Value == edge.Start.Point) == null)
+                                    customPanel1.points.Add(edge.Start);
+
+                                if (customPanel1.points.Find(pt => pt.Point.Value == edge.End.Point) == null)
+                                    customPanel1.points.Add(edge.End);
+                            }
+                        }
+                    }
+
+                    customPanel1.Invalidate();
+                }
+            }
+        }
+            
+        
     }
 }
+

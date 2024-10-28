@@ -2,10 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace gk_1
 {
+    [Serializable]
     internal class Edge
     {
         public MyPoint? Start { get; set; }
@@ -31,12 +34,22 @@ namespace gk_1
         public bool Vertical;
         public bool Horizontal;
         public double? FixedLength;
-        public bool G0, G1, C1;
+        public bool G1, C1;
+        public virtual string Serialize()
+        {
+            return JsonSerializer.Serialize(this);
+        }
     }
-    internal class SkewedEdge: Edge
+    [Serializable]
+    internal class SkewedEdge : Edge
     {
-        public MyPoint? First, Second;
+        public MyPoint? First {get; set;}
+        public MyPoint? Second { get; set;}
         public SkewedEdge(MyPoint start, MyPoint end, MyPoint first, MyPoint second): base(start, end) 
         { First = first; Second = second; }
+        public override string Serialize()
+        {
+            return JsonSerializer.Serialize(this);
+        }
     }
 }

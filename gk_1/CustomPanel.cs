@@ -1,5 +1,7 @@
-﻿using System;
+﻿using Microsoft.VisualBasic.ApplicationServices;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.DirectoryServices.ActiveDirectory;
 using System.Drawing;
@@ -9,24 +11,20 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Reflection.Metadata.Ecma335;
+using System.Resources;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace gk_1
 {
+    [Serializable]
     internal class CustomPanel : Panel
     {
-        // Do poprawy:
-        // -ograniczenia ciągłości
-        // -poprawienie jakości kodu
-        // -predefiniowana scena
-        // -przy usuwaniu wierzchołka dropConstraint
-        // -opis algorytmu relacji
-        // -poprawa Beziera i Bresenhama
-
         public Edge? hoveredEdge;
         public Point? hoveredPoint;
         public bool bezier;
@@ -58,30 +56,42 @@ namespace gk_1
             bitmap = new Bitmap(this.Width, this.Height);
             first = new MyPoint();
             second = new MyPoint();
-            vertical = Image.FromFile(Directory.GetCurrentDirectory() + "\\resources\\_vertical.png");
-            horizontal = Image.FromFile(Directory.GetCurrentDirectory() + "\\resources\\_horizontal.png");
+            
+            vertical = Image.FromFile("C:\\Users\\andrz\\source\\repos\\gk_1\\gk_1\\bin\\Debug\\net8.0-windows" + "\\resources\\_vertical.png");
+            horizontal = Image.FromFile("C:\\Users\\andrz\\source\\repos\\gk_1\\gk_1\\bin\\Debug\\net8.0-windows" + "\\resources\\_horizontal.png");
             MakePredefinedScene();
+        }
+        public void UpdateFirstControlPoint(Point e)
+        {
+            first.Point = e;
+            int index = points.FindIndex(point => point == toCurved.Start);
+            points.Insert(index, new MyPoint(first.Point.Value.X, first.Point.Value.Y));
+            this.Invalidate();
+        }
+        public void UpdateSecondControlPoint(Point e)
+        {
+            second.Point = e;
+            int index = points.FindIndex(point => point.Point.Value == first.Point.Value);
+            points.Insert(index, new MyPoint(second.Point.Value.X, second.Point.Value.Y));
+            MakeBezier();
+            this.Invalidate();
         }
         private void Form_MouseClick(object? sender, MouseEventArgs e)
         {
-            if (moving) 
+            if (moving)
+            {
                 moving = false;
-            
+            }
+
             if (bezier)
             {
                 if (first.Point == null)
                 {
-                    first.Point = e.Location;
-                    int index = points.FindIndex(point => point == toCurved.Start);
-                    points.Insert(index, new MyPoint(first.Point.Value.X, first.Point.Value.Y));
-                    this.Invalidate();
+                    UpdateFirstControlPoint(e.Location);
                 }
                 else if (second.Point == null)
                 {
-                    second.Point = e.Location;
-                    int index = points.FindIndex(point => point.Point.Value == first.Point.Value);
-                    points.Insert(index, new MyPoint(second.Point.Value.X, second.Point.Value.Y));
-                    this.Invalidate();
+                    UpdateSecondControlPoint(e.Location);
                 }
                 return;
             }
@@ -261,7 +271,7 @@ namespace gk_1
             }
             hoveredPoint = points[^1].Point;
             points[^1].Hovered = true;
-            
+
             var fs = new StreamWriter(Directory.GetCurrentDirectory() + "\\gowno.txt", true);
             fs.WriteLine(points[^1].Point.ToString());
             fs.Close();
@@ -353,8 +363,35 @@ namespace gk_1
 
             return new Point((int)cx, (int)cy);
         }
-    
-    public void MovePoint(MyPoint prev, MyPoint newPoint)
+        private void MovePointWithConstraintsSkewedEdge(List<Edge> adjSkewed, List<Edge> adjacentSkewedEdges, MyPoint prev, MyPoint newPoint, Edge skewedEdge)
+        {
+            if (adjSkewed.Count < 2 && adjacentSkewedEdges.Count == 0)
+            {
+                MoveControlPoint(prev, newPoint, (SkewedEdge)skewedEdge);
+
+            }
+            else if (adjSkewed.Count != 0)
+            {
+                var tmp = new List<SkewedEdge>();
+                foreach (var edge in adjSkewed)
+                {
+                    tmp.Add((SkewedEdge)edge);
+                }
+                MoveDoubleSkewedPoint(prev, newPoint, tmp);
+            }
+            else
+            {
+                var tmp = new List<SkewedEdge>();
+                foreach (var edge in adjSkewed)
+                {
+                    tmp.Add((SkewedEdge)edge);
+                }
+                MoveDoubleSkewedPoint(prev, newPoint, tmp);
+            }
+            this.Invalidate();
+        }
+
+        public void MovePoint(MyPoint prev, MyPoint newPoint)
         {
             int index = points.IndexOf(prev);
             if (index == -1) return;
@@ -383,33 +420,10 @@ namespace gk_1
 
             if ((skewedEdge != null || adjSkewed.Count == 2) && (prev.C1 || prev.G1))
             {
-                if (adjSkewed.Count < 2 && adjacentSkewedEdges.Count == 0)
-                {
-                    MoveControlPoint(prev, newPoint, (SkewedEdge)skewedEdge);
-
-                }
-                else if (adjSkewed.Count != 0)
-                {
-                    var tmp = new List<SkewedEdge>();
-                    foreach (var edge in adjSkewed)
-                    {
-                        tmp.Add((SkewedEdge)edge);
-                    }
-                    MoveDoubleSkewedPoint(prev, newPoint, tmp);
-                }
-                else
-                {
-                    //prev.Point = newPoint.Point;
-                    var tmp = new List<SkewedEdge>();
-                    foreach (var edge in adjSkewed)
-                    {
-                        tmp.Add((SkewedEdge)edge);
-                    }
-                    MoveDoubleSkewedPoint(prev, newPoint, tmp);
-                }
-                this.Invalidate();
+                MovePointWithConstraintsSkewedEdge(adjSkewed, adjacentSkewedEdges, prev, newPoint, skewedEdge);
                 return;
             }
+
 
             if (prev.Direction != null)
             {
@@ -449,6 +463,7 @@ namespace gk_1
                 Edge ed = adj[0] is SkewedEdge ? adj[1] : adj[0];
                 var controlPoint = prev == skewed.Start ? skewed.First : skewed.Second;
                 var point = prev == ed.Start ? ed.End : ed.Start;
+                
                 MakePointColinear(point, prev, controlPoint, Distance((Point)prev.Point, (Point)controlPoint.Point));
             }
             if (prev.C1)
@@ -461,6 +476,7 @@ namespace gk_1
             }
             this.Invalidate();
         }
+
         private void MoveDoubleSkewedPoint(MyPoint prev, MyPoint next, List<SkewedEdge> edges)
         {
             try
@@ -472,14 +488,14 @@ namespace gk_1
                 prev.Point = next.Point;
                 MakePointColinear(secondPoint, prev, firstPoint, Distance((Point)secondPoint.Point, (Point)prev.Point));
             }
-            catch(System.ArgumentOutOfRangeException) { }
+            catch (System.ArgumentOutOfRangeException) { }
 
         }
         private void MoveControlPoint(MyPoint prev, MyPoint next, SkewedEdge edge)
         {
 
             var start = prev == edge.First ? edge.Start : edge.End;
-            var _edge = edges.Find(e => (e.Start == start || e.End == start) && e is not SkewedEdge); // Do poprawy
+            var _edge = edges.Find(e => (e.Start == start || e.End == start) && e is not SkewedEdge);
             MyPoint end;
             if (_edge != null)
             {
@@ -488,8 +504,8 @@ namespace gk_1
             else
             {
                 end = edge.Start == start ? edge.End : edge.Start;
+                _edge = edges.Find(e => (e.Start == start || e.End == start) && e != edge);
             }
-            //var _edge = edges.Find(e => (e.Start == start || e.End == start) && e != edge);
 
             var adj = edges.Find(ed => ed != edge && (ed.End == start || ed.Start == start));
 
@@ -514,7 +530,6 @@ namespace gk_1
                     prev.Point = next.Point;
                     var control = skewed.Start == start ? skewed.First : skewed.Second;
                     MakePointColinear(prev, start, control, Distance((Point)prev.Point, (Point)control.Point));
-                    //AdjustControlPointPositionForContinuity(start, end, prev);
                 }
                 else
                 {
@@ -562,7 +577,7 @@ namespace gk_1
             {
                 // Ensure end remains horizontally aligned with start at the specified distance
                 int direction = controlPoint.Point.Value.X > start.Point.Value.X ? -1 : 1;
-                MovePoint(end,  new MyPoint(new Point((int)(start.Point.Value.X + distance * direction), start.Point.Value.Y)));
+                MovePoint(end, new MyPoint(new Point((int)(start.Point.Value.X + distance * direction), start.Point.Value.Y)));
             }
             else
             {
@@ -637,7 +652,7 @@ namespace gk_1
             int y = fixedPoint.Y + (int)(radius * Math.Sin(angle));
 
             return new Point(x, y);
-        }   
+        }
         private MyPoint? GetPointNearLocation(Point location)
         {
             // Iterate through points to find one close to the right-clicked location.
@@ -758,32 +773,15 @@ namespace gk_1
             {
                 g.Clear(Color.White);
                 g.ResetTransform();
-                //if (isPolygonClosed)
-                //{
-                //    GraphicsPath path = new GraphicsPath();
-                //    foreach (var edge in edges)
-                //    {
-                //        if (edge is SkewedEdge skewed)
-                //        {
-                //            path.AddBezier((PointF)skewed.Start.Point, (PointF)skewed.First.Point, (PointF)skewed.Second.Point, (PointF)skewed.End.Point);
-                //        }
-                //        else
-                //        {
-                //            path.AddLine((PointF)edge.Start.Point, (PointF)edge.End.Point);
-                //        }
-                //    }
-                //    path.CloseFigure();
-                //    g.FillPath(Brushes.LightCyan, path);
-                //}
 
                 using (Pen pen = new Pen(Color.Black, 3))
                 {
                     using Pen hPen = new Pen(Color.BlueViolet, 3);
                     using Pen dPen = new Pen(Color.LightGray, 2);
-                    if (bezier && first.Point != null && second.Point != null && toCurved != null)
-                    {
-                        MakeBezier();
-                    }
+                    //if (bezier && first.Point != null && second.Point != null && toCurved != null)
+                    //{
+                    //    MakeBezier();
+                    //}
 
                     foreach (var edge in edges)
                     {
@@ -804,7 +802,6 @@ namespace gk_1
                             DrawLine(g, dPen, (Point)skewedEdge.Second.Point, (Point)skewedEdge.End.Point, edge.Horizontal, edge.Vertical);
 
                         }
-
                         else
                         {
                             if (edge == hoveredEdge)
@@ -823,8 +820,6 @@ namespace gk_1
                 // Draw all stored points.
                 foreach (MyPoint p in points)
                 {
-                    if (p.Point == null) continue;
-
                     if (p.Point != hoveredPoint)
                         g.FillEllipse(Brushes.LightBlue, p.Point.Value.X - pointSize / 2, p.Point.Value.Y - pointSize / 2, pointSize, pointSize);
                     else
@@ -832,10 +827,6 @@ namespace gk_1
                 }
                 e.Graphics.DrawImage(bitmap, 0, 0);
             }
-        }
-        private void Form_RightClick(object sender, MouseEventArgs e)
-        {
-            // Dodawanie krawędzi 
         }
         public static double Distance(Point p1, Point p2)
         {
@@ -866,7 +857,6 @@ namespace gk_1
                 double unitDy = dy / distance;
                 double newEndX = edge.Start.Point.Value.X + unitDx * length;
                 double newEndY = edge.Start.Point.Value.Y + unitDy * length;
-                // hoveredEdge.End = new Point((int)newEndX, (int)newEndY);
                 MyPoint newEnd = new MyPoint((int)newEndX, (int)newEndY);
                 MovePoint(edge.End, newEnd);
             }
@@ -875,88 +865,10 @@ namespace gk_1
             edge.End.Fixed = true;
             this.Invalidate();
         }
-        
 
-        private void pomocToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            Help.ShowHelp(this, "C:\\Users\\andrz\\source\\repos\\gk_1\\gk_1\\bin\\Debug\\net8.0-windows\\help.html");
-        }
-
-        private double GetDistanceEdgePoint(Point location, Edge e)
-        {
-            // Iterate through points to find one close to the right-clicked location.
-            double x0 = location.X, y0 = location.Y, x1, x2, y1, y2;
-
-            // Calculate the distance between the click location and the point.
-            x1 = e.Start.Point.Value.X;
-            x2 = e.End.Point.Value.X;
-            y1 = e.Start.Point.Value.Y;
-            y2 = e.End.Point.Value.Y;
-
-            double distance = Math.Abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1);
-            double denominator = Math.Sqrt(Math.Pow(y2 - y1, 2) + Math.Pow(x2 - x1, 2));
-            return distance / denominator;
-        }
-        private void usunWielokatToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            points.Clear();
-            isPolygonClosed = false;
-            edges.Clear();
-            this.Invalidate();
-        }
-        //private (double, double) GetOffset(Edge e, Point p)
-        //{
-        //    double dy = e.End.Y - e.Start.Y;
-        //    double dx = e.End.X - e.Start.X;
-        //    double a1 = dy / dx;
-        //    double a2 = -1 / a1;
-        //    double b1 = e.Start.Y - a1 * e.Start.X;
-        //    double b2 = p.Y + 1 / a1 * p.X;
-
-        //    // k: y = a1 * x + b1
-        //    // l: y = a2 * x + b2
-        //    // punkt ( (b2 - b1) / (a1 - a2), a1 * (b2 - b1) / (a1 - a2) + b1)
-
-        //    double cross_x = (b2 - b1) / (a1 - a2);
-        //    double cross_y = a1 * (b2 - b1) / (a1 - a2) + b1;
-
-        //    return (p.X - cross_x, p.Y - cross_y);
-        //}
-        private PointF GetVectorToEdge(Point mouseLocation, Point edgeStart, Point edgeEnd)
-        {
-            // Convert Points to floating-point for precise calculation.
-            PointF p = new PointF(mouseLocation.X, mouseLocation.Y);
-            PointF a = new PointF(edgeStart.X, edgeStart.Y);
-            PointF b = new PointF(edgeEnd.X, edgeEnd.Y);
-
-            // Vector AB
-            PointF ab = new PointF(b.X - a.X, b.Y - a.Y);
-
-            // Vector AP
-            PointF ap = new PointF(p.X - a.X, p.Y - a.Y);
-
-            // Calculate the projection of AP onto AB
-            float abSquared = ab.X * ab.X + ab.Y * ab.Y;
-            float dotProduct = ap.X * ab.X + ap.Y * ab.Y;
-
-            // The projection factor t (how far along AB is the projection of P)
-            float t = dotProduct / abSquared;
-
-            // Clamp t to [0, 1] to ensure the closest point lies on the segment.
-            t = Math.Max(0, Math.Min(1, t));
-
-            // Calculate the closest point C on the segment
-            PointF c = new PointF(a.X + t * ab.X, a.Y + t * ab.Y);
-
-            // Calculate the vector from C to P (mouse location)
-            PointF vector = new PointF(p.X - c.X, p.Y - c.Y);
-
-            return vector;
-        }
         private void DrawBezier(Graphics graphics, Pen pen, SkewedEdge edge)
         {
             // Number of steps determines the curve's smoothness.
-            // do poprawy
             Point p0 = edge.Start.Point.Value;
             Point p1 = edge.First.Point.Value;
             Point p2 = edge.Second.Point.Value;
@@ -1158,7 +1070,6 @@ namespace gk_1
         }
         public void AddG1Constraint(MyPoint point)
         {
-            //MessageBox.Show($"Constraint added to point {point.Point.Value}");
             point.G1 = true;
             var adj = FindAdjacentEdges((Point)point.Point);
             if (adj.Count < 2)
@@ -1179,7 +1090,6 @@ namespace gk_1
             SkewedEdge skewed = (SkewedEdge)(adj[0] is SkewedEdge ? adj[0] : adj[1]);
             MyPoint controlPointToChange = point == skewed.Start ? skewed.First : skewed.Second;
             MyPoint edgePoint = point == ed.Start ? ed.End : ed.Start;
-            //edgePoint.G1 = true;
             MakePointColinear(edgePoint, point, controlPointToChange);
             ed.G1 = true;
             controlPointToChange.G1 = true;
@@ -1197,34 +1107,26 @@ namespace gk_1
         public void MakePointColinear(MyPoint p1, MyPoint p2, MyPoint toChange, double distance = 20)
         {
             (double a, double b) = Line((Point)p1.Point, (Point)p2.Point);
-            // Update control point direction
             toChange.Direction = (a, b);
 
-            // Calculate direction along the line from p2 to p1
             int directionX = p1.Point.Value.X > p2.Point.Value.X ? -1 : 1;
             int directionY = p1.Point.Value.Y > p2.Point.Value.Y ? 1 : -1;
 
             if (a == double.MaxValue)
             {
-                // Vertical line case
                 int newY = p2.Point.Value.Y - (int)(distance * directionY);
                 toChange.Point = new Point(p2.Point.Value.X, newY);
             }
             else if (a == 0)
             {
-                // Horizontal line case
                 int newX = p2.Point.Value.X + (int)(distance * directionX);
                 toChange.Point = new Point(newX, p2.Point.Value.Y);
             }
             else
             {
-                // General line case: move to specified distance along the line
                 double angle = Math.Atan2(p2.Point.Value.Y - p1.Point.Value.Y, p2.Point.Value.X - p1.Point.Value.X);
-                //directionY = Math.Sin(angle) < 0 ? -1 : 1;
-                //directionX = Math.Cos(angle) < 0 ? -1 : 1;
                 int newX = p2.Point.Value.X + (int)(distance * Math.Cos(angle));
                 int newY = p2.Point.Value.Y + (int)(distance * Math.Sin(angle));
-
                 toChange.Point = new Point(newX, newY);
             }
         }
@@ -1238,7 +1140,7 @@ namespace gk_1
                 MessageBox.Show("Can't add constraint!");
                 return;
             }
-            if (adj[0] is SkewedEdge first && adj[1] is SkewedEdge second)
+            if (adj[0] is SkewedEdge first && adj[1] is SkewedEdge second) // Punkt pomiędzy dwoma segmentami Beziera
             {
                 var control_1 = point == first.Start ? first.First : second.First;
                 var control_2 = point == first.End ? first.Second : second.Second;
@@ -1253,13 +1155,12 @@ namespace gk_1
                 SkewedEdge skewed = (SkewedEdge)(adj[0] is SkewedEdge ? adj[0] : adj[1]);
                 MyPoint controlPointToChange = point == skewed.Start ? skewed.First : skewed.Second;
                 MyPoint edgePoint = point == ed.Start ? ed.End : ed.Start;
-                //edgePoint.G1 = true;
                 MakePointColinear(edgePoint, point, controlPointToChange, Distance((Point)edgePoint.Point, (Point)point.Point) / 3);
                 ed.C1 = true;
                 controlPointToChange.C1 = true;
                 this.Invalidate();
             }
-            catch(Exception) { MessageBox.Show("Can't add constraint!"); }
+            catch (Exception) { MessageBox.Show("Can't add constraint!"); }
 
         }
         public void RemoveC1Constraint(MyPoint point)
@@ -1277,38 +1178,6 @@ namespace gk_1
             Edge ed = adj[0] is SkewedEdge ? adj[1] : adj[0];
             ed.G1 = false;
             this.Invalidate();
-        }
-        private void HandleG1Continuity(MyPoint prev)
-        {
-            var adj = FindAdjacentEdges((Point)prev.Point);
-            var g1Edges = adj.FindAll(edge => edge.G1);
-
-            foreach (var edge in g1Edges)
-            {
-                var start = prev;
-                var end = edge.End == prev ? edge.Start : edge.End;
-                var skew = (SkewedEdge)edges.Find(ed => (ed.Start == end || ed.End == end) && ed is SkewedEdge);
-                var control = end == skew.Start ? skew.First : skew.Second;
-
-                MakePointColinear(start, end, control);
-            }
-        }
-
-        private void HandleC1Continuity(MyPoint prev)
-        {
-            var adj = FindAdjacentEdges((Point)prev.Point);
-            var c1Edges = adj.FindAll(edge => edge.C1);
-
-            foreach (var edge in c1Edges)
-            {
-                var start = prev;
-                var end = edge.End == prev ? edge.Start : edge.End;
-                var skew = (SkewedEdge)edges.Find(ed => (ed.Start == end || ed.End == end) && ed is SkewedEdge);
-                var control = end == skew.Start ? skew.First : skew.Second;
-
-                MakePointColinear(start, end, control,
-                    Distance((Point)end.Point, (Point)start.Point) / 3);
-            }
         }
         public void DropContinuity(MyPoint point)
         {
@@ -1338,7 +1207,26 @@ namespace gk_1
             var _new = new Edge(edge.Start, edge.End);
             _new.G1 = _new.C1 = false;
             edges.Add(_new);
-            
+        }
+        public string Serialize()
+        {
+            string ans = string.Empty;
+            foreach(var point in points)
+            {
+                ans += point.Serialize() + '\n';
+            }
+            foreach(var edge in edges)
+            {
+                if (edge is SkewedEdge skewed)
+                    ans += skewed.Serialize() + "\n";
+                else
+                    ans += edge.Serialize() + "\n";
+            }
+            return ans;
+        }
+        public void MakeDistinctPoints()
+        {
+
         }
     }
 }

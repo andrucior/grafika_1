@@ -43,19 +43,23 @@
             verticalToolStripMenuItem1 = new ToolStripMenuItem();
             horizontalToolStripMenuItem1 = new ToolStripMenuItem();
             movePolygonToolStripMenuItem = new ToolStripMenuItem();
-            customPanel1 = new CustomPanel();
-            radioButton1 = new RadioButton();
             algorithmExplanationToolStripMenuItem = new ToolStripMenuItem();
+            fileToolStripMenuItem = new ToolStripMenuItem();
+            saveToolStripMenuItem = new ToolStripMenuItem();
+            loadToolStripMenuItem = new ToolStripMenuItem();
+            radioButton1 = new RadioButton();
+            checkBox1 = new CheckBox();
+            customPanel1 = new CustomPanel();
             menuStrip1.SuspendLayout();
             SuspendLayout();
             // 
             // menuStrip1
             // 
             menuStrip1.ImageScalingSize = new Size(20, 20);
-            menuStrip1.Items.AddRange(new ToolStripItem[] { pomocToolStripMenuItem, usunWielokatToolStripMenuItem, toolStripMenuItem2, drawBezierToolStripMenuItem, addConstraintToolStripMenuItem, movePolygonToolStripMenuItem, algorithmExplanationToolStripMenuItem });
+            menuStrip1.Items.AddRange(new ToolStripItem[] { pomocToolStripMenuItem, usunWielokatToolStripMenuItem, toolStripMenuItem2, drawBezierToolStripMenuItem, addConstraintToolStripMenuItem, movePolygonToolStripMenuItem, algorithmExplanationToolStripMenuItem, fileToolStripMenuItem });
             menuStrip1.Location = new Point(0, 0);
             menuStrip1.Name = "menuStrip1";
-            menuStrip1.Size = new Size(800, 28);
+            menuStrip1.Size = new Size(882, 28);
             menuStrip1.TabIndex = 1;
             menuStrip1.Text = "menuStrip1";
             // 
@@ -156,18 +160,39 @@
             movePolygonToolStripMenuItem.Text = "Move Polygon";
             movePolygonToolStripMenuItem.Click += movePolygonToolStripMenuItem_Click;
             // 
-            // customPanel1
+            // algorithmExplanationToolStripMenuItem
             // 
-            customPanel1.Location = new Point(12, 45);
-            customPanel1.Name = "customPanel1";
-            customPanel1.Size = new Size(776, 363);
-            customPanel1.TabIndex = 2;
+            algorithmExplanationToolStripMenuItem.Name = "algorithmExplanationToolStripMenuItem";
+            algorithmExplanationToolStripMenuItem.Size = new Size(172, 24);
+            algorithmExplanationToolStripMenuItem.Text = "Algorithm Explanation";
+            algorithmExplanationToolStripMenuItem.Click += algorithmExplanationToolStripMenuItem_Click;
+            // 
+            // fileToolStripMenuItem
+            // 
+            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { saveToolStripMenuItem, loadToolStripMenuItem });
+            fileToolStripMenuItem.Name = "fileToolStripMenuItem";
+            fileToolStripMenuItem.Size = new Size(46, 24);
+            fileToolStripMenuItem.Text = "File";
+            // 
+            // saveToolStripMenuItem
+            // 
+            saveToolStripMenuItem.Name = "saveToolStripMenuItem";
+            saveToolStripMenuItem.Size = new Size(224, 26);
+            saveToolStripMenuItem.Text = "Save";
+            saveToolStripMenuItem.Click += saveToolStripMenuItem_Click;
+            // 
+            // loadToolStripMenuItem
+            // 
+            loadToolStripMenuItem.Name = "loadToolStripMenuItem";
+            loadToolStripMenuItem.Size = new Size(224, 26);
+            loadToolStripMenuItem.Text = "Load";
+            loadToolStripMenuItem.Click += loadToolStripMenuItem_Click;
             // 
             // radioButton1
             // 
             radioButton1.AutoCheck = false;
             radioButton1.AutoSize = true;
-            radioButton1.Location = new Point(12, 414);
+            radioButton1.Location = new Point(29, 518);
             radioButton1.Name = "radioButton1";
             radioButton1.Size = new Size(103, 24);
             radioButton1.TabIndex = 3;
@@ -177,24 +202,36 @@
             radioButton1.CheckedChanged += radioButton1_CheckedChanged;
             radioButton1.MouseClick += radioButton1_MouseClick;
             // 
-            // algorithmExplanationToolStripMenuItem
+            // checkBox1
             // 
-            algorithmExplanationToolStripMenuItem.Name = "algorithmExplanationToolStripMenuItem";
-            algorithmExplanationToolStripMenuItem.Size = new Size(172, 24);
-            algorithmExplanationToolStripMenuItem.Text = "Algorithm Explanation";
-            algorithmExplanationToolStripMenuItem.Click += algorithmExplanationToolStripMenuItem_Click;
+            checkBox1.AutoSize = true;
+            checkBox1.Location = new Point(225, 518);
+            checkBox1.Name = "checkBox1";
+            checkBox1.Size = new Size(161, 24);
+            checkBox1.TabIndex = 4;
+            checkBox1.Text = "Automatic relations";
+            checkBox1.UseVisualStyleBackColor = true;
+            checkBox1.CheckedChanged += checkBox1_CheckedChanged;
+            // 
+            // customPanel1
+            // 
+            customPanel1.Location = new Point(0, 31);
+            customPanel1.Name = "customPanel1";
+            customPanel1.Size = new Size(870, 481);
+            customPanel1.TabIndex = 5;
             // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 450);
-            Controls.Add(radioButton1);
+            ClientSize = new Size(882, 553);
             Controls.Add(customPanel1);
+            Controls.Add(checkBox1);
+            Controls.Add(radioButton1);
             Controls.Add(menuStrip1);
             MainMenuStrip = menuStrip1;
-            MaximumSize = new Size(818, 497);
-            MinimumSize = new Size(818, 497);
+            MaximumSize = new Size(900, 600);
+            MinimumSize = new Size(900, 600);
             Name = "Form1";
             Text = "Form1";
             menuStrip1.ResumeLayout(false);
@@ -223,5 +260,9 @@
         private ToolStripMenuItem horizontalToolStripMenuItem1;
         private ToolStripMenuItem movePolygonToolStripMenuItem;
         private ToolStripMenuItem algorithmExplanationToolStripMenuItem;
+        private CheckBox checkBox1;
+        private ToolStripMenuItem fileToolStripMenuItem;
+        private ToolStripMenuItem saveToolStripMenuItem;
+        private ToolStripMenuItem loadToolStripMenuItem;
     }
 }
