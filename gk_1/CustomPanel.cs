@@ -12,6 +12,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
 
 namespace gk_1
@@ -42,7 +43,7 @@ namespace gk_1
         public Edge? toCurved;
         public MyPoint? draggedPoint = null;
         public bool selectedPoint = false;
-
+        public bool moving = false;
 
         public CustomPanel()
         {
@@ -57,11 +58,15 @@ namespace gk_1
             bitmap = new Bitmap(this.Width, this.Height);
             first = new MyPoint();
             second = new MyPoint();
-            vertical = Image.FromFile("C:\\Users\\andrz\\source\\repos\\gk_1\\gk_1\\bin\\Debug\\net8.0-windows\\resources\\_vertical.png");
-            horizontal = Image.FromFile("C:\\Users\\andrz\\source\\repos\\gk_1\\gk_1\\bin\\Debug\\net8.0-windows\\resources\\_horizontal.png");
+            vertical = Image.FromFile(Directory.GetCurrentDirectory() + "\\resources\\_vertical.png");
+            horizontal = Image.FromFile(Directory.GetCurrentDirectory() + "\\resources\\_horizontal.png");
+            MakePredefinedScene();
         }
         private void Form_MouseClick(object? sender, MouseEventArgs e)
         {
+            if (moving) 
+                moving = false;
+            
             if (bezier)
             {
                 if (first.Point == null)
@@ -87,7 +92,7 @@ namespace gk_1
 
             if ((hoveredPoint == null || hoveredPoint == points[0].Point.Value) && e.Button == MouseButtons.Left && !isPolygonClosed && ed == null)
             {
-                AddPoint(e);
+                AddPoint(e.Location);
             }
             else if (e.Button == MouseButtons.Right && hoveredPoint != null)
             {
@@ -149,6 +154,28 @@ namespace gk_1
                 hoveredEdge = null;
                 this.Invalidate();
             }
+        }
+        private void MakePredefinedScene()
+        {
+            AddPoint(new Point { X = 256, Y = 97 });
+            AddPoint(new Point { X = 312, Y = 67 });
+            AddPoint(new Point { X = 513, Y = 115 });
+            AddPoint(new Point { X = 424, Y = 225 });
+            AddPoint(new Point { X = 290, Y = 260 });
+            AddPoint(new Point { X = 156, Y = 210 });
+            AddPoint(new Point { X = 143, Y = 110 });
+            AddPoint(new Point { X = 256, Y = 97 });
+            first.Point = new Point(270, 120);
+            second.Point = new Point(400, 100);
+            toCurved = edges[1];
+            int index = points.FindIndex(point => point == toCurved.Start);
+            points.Insert(index, new MyPoint(first.Point.Value.X, first.Point.Value.Y));
+            points.Insert(index, new MyPoint(second.Point.Value.X, second.Point.Value.Y));
+            MakeBezier();
+            MakeVertical(edges[2]);
+            MakeHorizontal(edges[5]);
+            LengthConstraint(Distance((Point)edges[4].Start.Point, (Point)edges[4].End.Point), edges[4]);
+            this.Invalidate();
         }
 
         private void UpdateHoveredEdge(Edge edge)
@@ -212,9 +239,9 @@ namespace gk_1
             }
         }
 
-        private void AddPoint(MouseEventArgs e)
+        private void AddPoint(Point newPoint)
         {
-            Point newPoint = e.Location;
+
 
             // Check if the user clicked near the first point to close the polygon.
             if (points.Count > 2 && IsPointNearLocation((Point)points[0].Point, newPoint))
@@ -234,6 +261,10 @@ namespace gk_1
             }
             hoveredPoint = points[^1].Point;
             points[^1].Hovered = true;
+            
+            var fs = new StreamWriter(Directory.GetCurrentDirectory() + "\\gowno.txt", true);
+            fs.WriteLine(points[^1].Point.ToString());
+            fs.Close();
             this.Invalidate(); // Redraw the form to display the updated polygon.
         }
         private void Form_MouseDown(object? sender, MouseEventArgs e)
@@ -285,22 +316,97 @@ namespace gk_1
                 {
                     UpdateHoveredEdge(edge);
                 }
+                else if (moving)
+                {
+                    var midpoint = CalculateCentroid();
+                    int dx = e.Location.X - midpoint.X;
+                    int dy = e.Location.Y - midpoint.Y;
+                    MovePolygon(dx, dy);
+                }
                 else
                 {
                     ClearHovered();
                 }
             }
+            this.Invalidate();
         }
-        public void MovePoint(MyPoint prev, MyPoint newPoint)
+        private Point CalculateCentroid()
+        {
+            float cx = 0, cy = 0;
+            float area = 0;
+            int count = points.Count;
+
+            for (int i = 0; i < count; i++)
+            {
+                Point current = (Point)points[i].Point;
+                Point next = (Point)points[(i + 1) % count].Point;
+
+                float factor = current.X * next.Y - next.X * current.Y;
+                area += factor;
+                cx += (current.X + next.X) * factor;
+                cy += (current.Y + next.Y) * factor;
+            }
+
+            area *= 0.5f;
+            cx /= (6 * area);
+            cy /= (6 * area);
+
+            return new Point((int)cx, (int)cy);
+        }
+    
+    public void MovePoint(MyPoint prev, MyPoint newPoint)
         {
             int index = points.IndexOf(prev);
             if (index == -1) return;
 
-            var skewedEdge = edges.OfType<SkewedEdge>().FirstOrDefault(ed => ed.First == prev || ed.Second == prev);
+            var skewedEdge = edges.Find(edge => edge is SkewedEdge ed && (ed.First == prev || ed.Second == prev));
+            var adjSkewed = edges.FindAll(edge => edge is SkewedEdge ed && (ed.Start == prev || ed.End == prev));
 
-            if (skewedEdge != null && (prev.C1 || prev.G1))
+            List<Edge> adjacentSkewedEdges = new List<Edge>();
+
+            if (skewedEdge != null)
             {
-                MoveControlPoint(prev, newPoint, skewedEdge);
+                for (int i = 0; i < edges.Count; i++)
+                {
+                    if (edges[i] is SkewedEdge currentEdge)
+                    {
+                        // Check if any of the skewed edges share a Start or End with the current edge
+                        var match = (skewedEdge.Start == currentEdge.Start || skewedEdge.End == currentEdge.Start) && edges[i] != skewedEdge;
+
+                        if (match)
+                        {
+                            adjacentSkewedEdges.Add(currentEdge);
+                        }
+                    }
+                }
+            }
+
+            if ((skewedEdge != null || adjSkewed.Count == 2) && (prev.C1 || prev.G1))
+            {
+                if (adjSkewed.Count < 2 && adjacentSkewedEdges.Count == 0)
+                {
+                    MoveControlPoint(prev, newPoint, (SkewedEdge)skewedEdge);
+
+                }
+                else if (adjSkewed.Count != 0)
+                {
+                    var tmp = new List<SkewedEdge>();
+                    foreach (var edge in adjSkewed)
+                    {
+                        tmp.Add((SkewedEdge)edge);
+                    }
+                    MoveDoubleSkewedPoint(prev, newPoint, tmp);
+                }
+                else
+                {
+                    //prev.Point = newPoint.Point;
+                    var tmp = new List<SkewedEdge>();
+                    foreach (var edge in adjSkewed)
+                    {
+                        tmp.Add((SkewedEdge)edge);
+                    }
+                    MoveDoubleSkewedPoint(prev, newPoint, tmp);
+                }
                 this.Invalidate();
                 return;
             }
@@ -343,7 +449,7 @@ namespace gk_1
                 Edge ed = adj[0] is SkewedEdge ? adj[1] : adj[0];
                 var controlPoint = prev == skewed.Start ? skewed.First : skewed.Second;
                 var point = prev == ed.Start ? ed.End : ed.Start;
-                MakePointColinear(point, prev, controlPoint);
+                MakePointColinear(point, prev, controlPoint, Distance((Point)prev.Point, (Point)controlPoint.Point));
             }
             if (prev.C1)
             {
@@ -355,28 +461,60 @@ namespace gk_1
             }
             this.Invalidate();
         }
-
-        private void MoveControlPoint(MyPoint prev, MyPoint next, SkewedEdge skewedEdge)
+        private void MoveDoubleSkewedPoint(MyPoint prev, MyPoint next, List<SkewedEdge> edges)
         {
-            var start = prev == skewedEdge.First ? skewedEdge.Start : skewedEdge.End;
-            var edge = edges.First(e => (e.Start == start || e.End == start) && e is not SkewedEdge);
-            var end = edge.Start == start ? edge.End : edge.Start;
+            try
+            {
+                var first = edges[0];
+                var second = edges[1];
+                var firstPoint = first.First.G1 || first.Second.C1 ? first.First : first.Second;
+                var secondPoint = second.First.G1 || second.Second.C1 ? second.First : second.Second;
+                prev.Point = next.Point;
+                MakePointColinear(secondPoint, prev, firstPoint, Distance((Point)secondPoint.Point, (Point)prev.Point));
+            }
+            catch(System.ArgumentOutOfRangeException) { }
+
+        }
+        private void MoveControlPoint(MyPoint prev, MyPoint next, SkewedEdge edge)
+        {
+
+            var start = prev == edge.First ? edge.Start : edge.End;
+            var _edge = edges.Find(e => (e.Start == start || e.End == start) && e is not SkewedEdge); // Do poprawy
+            MyPoint end;
+            if (_edge != null)
+            {
+                end = _edge.Start == start ? _edge.End : _edge.Start;
+            }
+            else
+            {
+                end = edge.Start == start ? edge.End : edge.Start;
+            }
+            //var _edge = edges.Find(e => (e.Start == start || e.End == start) && e != edge);
+
+            var adj = edges.Find(ed => ed != edge && (ed.End == start || ed.Start == start));
 
             if (start.C1 || start.G1)
             {
-                if (edge.Horizontal)
+                if (_edge.Horizontal)
                 {
                     prev.Point = new Point(next.Point.Value.X, start.Point.Value.Y);
                     AdjustControlPointPositionForContinuity(start, end, prev);
                 }
-                else if (edge.Vertical)
+                else if (_edge.Vertical)
                 {
                     prev.Point = new Point(start.Point.Value.X, next.Point.Value.Y);
                     AdjustControlPointPositionForContinuity(start, end, prev);
                 }
-                else if (edge.FixedLength != null && start.C1)
+                else if (_edge.FixedLength != null && start.C1)
                 {
                     prev.Point = AdjustToFixedDistance((Point)start.Point, (Point)next.Point, (double)edge.FixedLength);
+                }
+                else if (adj is SkewedEdge skewed)
+                {
+                    prev.Point = next.Point;
+                    var control = skewed.Start == start ? skewed.First : skewed.Second;
+                    MakePointColinear(prev, start, control, Distance((Point)prev.Point, (Point)control.Point));
+                    //AdjustControlPointPositionForContinuity(start, end, prev);
                 }
                 else
                 {
@@ -418,13 +556,13 @@ namespace gk_1
             {
                 // Ensure end remains vertically aligned with start at the specified distance
                 int direction = controlPoint.Point.Value.Y > start.Point.Value.Y ? -1 : 1;
-                end.Point = new Point(start.Point.Value.X, (int)(start.Point.Value.Y + distance * direction));
+                MovePoint(end, new MyPoint(new Point(start.Point.Value.X, (int)(start.Point.Value.Y + distance * direction))));
             }
             else if (Math.Abs(a) < 1e-10) // Handle horizontal constraint
             {
                 // Ensure end remains horizontally aligned with start at the specified distance
                 int direction = controlPoint.Point.Value.X > start.Point.Value.X ? -1 : 1;
-                end.Point = new Point((int)(start.Point.Value.X + distance * direction), start.Point.Value.Y);
+                MovePoint(end,  new MyPoint(new Point((int)(start.Point.Value.X + distance * direction), start.Point.Value.Y)));
             }
             else
             {
@@ -432,7 +570,7 @@ namespace gk_1
                 int direction = controlPoint.Point.Value.X > start.Point.Value.X ? -1 : 1;
                 int newX = (int)(start.Point.Value.X + direction * Math.Cos(Math.Atan(a)) * distance);
                 int newY = (int)(a * newX + b);
-                end.Point = new Point(newX, newY);
+                MovePoint(end, new MyPoint(new Point(newX, newY)));
             }
         }
 
@@ -452,7 +590,7 @@ namespace gk_1
 
                     var control = end == skew.Start ? skew.First : skew.Second;
                     if (edge.G1)
-                        MakePointColinear(start, end, control);
+                        MakePointColinear(start, end, control, Distance((Point)end.Point, (Point)control.Point));
                     if (edge.C1)
                         MakePointColinear(start, end, control, Distance((Point)start.Point, (Point)end.Point) / 3);
                 }
@@ -499,88 +637,7 @@ namespace gk_1
             int y = fixedPoint.Y + (int)(radius * Math.Sin(angle));
 
             return new Point(x, y);
-        }
-
-        private void MoveEdge(MouseEventArgs e)
-        {
-            // Do poprawy dla ograniczeń
-            int edgeIndex = edges.IndexOf(hoveredEdge);
-            if (edgeIndex == -1) return; // Edge not found in list, return early.
-
-            // Use IndexOf to find point indices directly
-            int pt1Index = points.IndexOf(hoveredEdge.Start);
-            int pt2Index = points.IndexOf(hoveredEdge.End);
-            Point pt1 = hoveredEdge.Start.Point.Value;
-            Point pt2 = hoveredEdge.End.Point.Value;
-
-            if (pt1Index == -1 || pt2Index == -1) return; // If points are not found, exit early.
-
-            PointF vector = GetVectorToEdge(e.Location, hoveredEdge.Start.Point.Value, hoveredEdge.End.Point.Value);
-            MyPoint newStart = new MyPoint((int)(hoveredEdge.Start.Point.Value.X + vector.X), (int)(hoveredEdge.Start.Point.Value.Y + vector.Y));
-            MyPoint newEnd = new MyPoint((int)(hoveredEdge.End.Point.Value.X + vector.X), (int)(hoveredEdge.End.Point.Value.Y + vector.Y));
-
-            MovePoint(edges[edgeIndex].Start, newStart);
-            MovePoint(edges[edgeIndex].End, newEnd);
-            hoveredEdge = edges[edgeIndex];
-
-            //for (int i = 0; i < edges.Count; i++)
-            //{
-            //    Edge ed = edges[i];
-            //    if (ed.Start.Point.Value.X == pt1.X && ed.Start.Point.Value.Y == pt1.Y)
-            //    {
-            //        ed.Start = newStart;
-            //    }
-            //    if (ed.Start.Point.Value.X == pt2.X && ed.Start.Point.Value.Y == pt2.Y)
-            //    {
-            //        ed.Start = newEnd;
-            //    }
-            //    if (ed.End.Point.Value.X == pt1.X && ed.End.Point.Value.Y == pt1.Y)
-            //    {
-            //        ed.End = newStart;
-            //    }
-            //    if (ed.End.Point.Value.X == pt2.X && ed.End.Point.Value.Y == pt2.Y)
-            //    {
-            //        ed.End = newEnd;
-            //    }
-            //}
-
-            //// Invalidate to trigger redraw
-            this.Invalidate();
-
-        }
-        private void ChangeHoveredPoint(MouseEventArgs e)
-        {
-            MyPoint? newHoveredPoint = GetPointNearLocation(e.Location);
-            var tmp = points.Find(pt => pt.Point == hoveredPoint);
-            if (tmp != null)
-            {
-                if (newHoveredPoint == null)
-                {
-                    tmp.Hovered = false;
-                    hoveredPoint = null;
-                    this.Invalidate();
-                    return;
-                }
-
-
-                if (newHoveredPoint.Point.Value != hoveredPoint)
-                {
-                    hoveredPoint = newHoveredPoint.Point.Value;
-                    newHoveredPoint.Hovered = true;
-                    tmp.Hovered = false;
-                    this.Invalidate(); // Redraw to update the hover effect.
-                }
-            }
-        }
-        private void ChangeHoveredEdge(MouseEventArgs e)
-        {
-            Edge? newHoveredEdge = GetEdgeNearLocation(e.Location);
-            if (newHoveredEdge != hoveredEdge && e.Button != MouseButtons.Left)
-            {
-                hoveredEdge = newHoveredEdge;
-                this.Invalidate();
-            }
-        }
+        }   
         private MyPoint? GetPointNearLocation(Point location)
         {
             // Iterate through points to find one close to the right-clicked location.
@@ -603,31 +660,82 @@ namespace gk_1
 
         private Edge? GetEdgeNearLocation(Point location)
         {
-            // Iterate through points to find one close to the right-clicked location.
-            double x0 = location.X, y0 = location.Y, x1, x2, y1, y2;
+            double x0 = location.X, y0 = location.Y;
             Edge? closest = null;
-            double min = double.MaxValue;
+            double minDistance = double.MaxValue;
+
             foreach (Edge e in edges)
             {
-                // Calculate the distance between the click location and the point.
-                x1 = e.Start.Point.Value.X;
-                x2 = e.End.Point.Value.X;
-                y1 = e.Start.Point.Value.Y;
-                y2 = e.End.Point.Value.Y;
+                double distance;
 
-                double distance = Math.Abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1);
-                double denominator = Math.Sqrt(Math.Pow(y2 - y1, 2) + Math.Pow(x2 - x1, 2));
-
-                if (distance / denominator <= 1.2 && distance / denominator < min)
+                if (e is SkewedEdge skewedEdge)
                 {
-                    // Return the point if the distance is within the allowed click radius.
+                    // If the edge is a Bezier curve, sample points along the curve to approximate the closest point
+                    const int SampleCount = 100; // Higher values increase accuracy but may reduce performance
+                    distance = double.MaxValue;
+
+                    for (int i = 0; i <= SampleCount; i++)
+                    {
+                        float t = i / (float)SampleCount;
+                        Point bezierPoint = CalculateBezierPoint(skewedEdge, t);
+
+                        double dx = bezierPoint.X - x0;
+                        double dy = bezierPoint.Y - y0;
+                        double sampleDistance = Math.Sqrt(dx * dx + dy * dy);
+
+                        if (sampleDistance < distance)
+                        {
+                            distance = sampleDistance;
+                        }
+                    }
+                }
+                else
+                {
+                    // If the edge is a straight line, calculate distance to the line segment
+                    double x1 = e.Start.Point.Value.X;
+                    double y1 = e.Start.Point.Value.Y;
+                    double x2 = e.End.Point.Value.X;
+                    double y2 = e.End.Point.Value.Y;
+
+                    double lineDistance = Math.Abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1);
+                    double denominator = Math.Sqrt(Math.Pow(y2 - y1, 2) + Math.Pow(x2 - x1, 2));
+                    distance = lineDistance / denominator;
+                }
+
+                if (distance <= 1.3 && distance < minDistance)
+                {
+                    // Update closest edge if the current one is closer than previously found edges
                     closest = e;
-                    min = distance / denominator;
+                    minDistance = distance;
                 }
             }
 
-            // Return null if no point is close enough.
             return closest;
+        }
+
+        // Helper function to calculate a point on the Bezier curve at parameter t
+        private Point CalculateBezierPoint(SkewedEdge skewedEdge, float t)
+        {
+            var P0 = skewedEdge.Start.Point.Value;
+            var P1 = skewedEdge.First.Point.Value;
+            var P2 = skewedEdge.Second.Point.Value;
+            var P3 = skewedEdge.End.Point.Value;
+
+            float x = (float)(
+                Math.Pow(1 - t, 3) * P0.X +
+                3 * Math.Pow(1 - t, 2) * t * P1.X +
+                3 * (1 - t) * Math.Pow(t, 2) * P2.X +
+                Math.Pow(t, 3) * P3.X
+            );
+
+            float y = (float)(
+                Math.Pow(1 - t, 3) * P0.Y +
+                3 * Math.Pow(1 - t, 2) * t * P1.Y +
+                3 * (1 - t) * Math.Pow(t, 2) * P2.Y +
+                Math.Pow(t, 3) * P3.Y
+            );
+
+            return new Point((int)x, (int)y);
         }
 
         protected override void OnResize(EventArgs e)
@@ -650,23 +758,23 @@ namespace gk_1
             {
                 g.Clear(Color.White);
                 g.ResetTransform();
-                if (isPolygonClosed)
-                {
-                    GraphicsPath path = new GraphicsPath();
-                    foreach (var edge in edges)
-                    {
-                        if (edge is SkewedEdge skewed)
-                        {
-                            path.AddBezier((PointF)skewed.Start.Point, (PointF)skewed.First.Point, (PointF)skewed.Second.Point, (PointF)skewed.End.Point);
-                        }
-                        else
-                        {
-                            path.AddLine((PointF)edge.Start.Point, (PointF)edge.End.Point);
-                        }
-                    }
-                    path.CloseFigure();
-                    g.FillPath(Brushes.LightCyan, path);
-                }
+                //if (isPolygonClosed)
+                //{
+                //    GraphicsPath path = new GraphicsPath();
+                //    foreach (var edge in edges)
+                //    {
+                //        if (edge is SkewedEdge skewed)
+                //        {
+                //            path.AddBezier((PointF)skewed.Start.Point, (PointF)skewed.First.Point, (PointF)skewed.Second.Point, (PointF)skewed.End.Point);
+                //        }
+                //        else
+                //        {
+                //            path.AddLine((PointF)edge.Start.Point, (PointF)edge.End.Point);
+                //        }
+                //    }
+                //    path.CloseFigure();
+                //    g.FillPath(Brushes.LightCyan, path);
+                //}
 
                 using (Pen pen = new Pen(Color.Black, 3))
                 {
@@ -674,15 +782,7 @@ namespace gk_1
                     using Pen dPen = new Pen(Color.LightGray, 2);
                     if (bezier && first.Point != null && second.Point != null && toCurved != null)
                     {
-                        var tmp = points.Find(pt => pt.Point.Value == first.Point.Value);
-                        var tmp2 = points.Find(pt => pt.Point.Value == second.Point.Value);
-
-                        SkewedEdge edge = new SkewedEdge(toCurved.Start, toCurved.End, tmp, tmp2);
-                        edges.Remove(toCurved);
-                        edges.Add(edge);
-                        bezier = false;
-                        toCurved = null;
-                        first.Point = second.Point = null;
+                        MakeBezier();
                     }
 
                     foreach (var edge in edges)
@@ -741,6 +841,19 @@ namespace gk_1
         {
             return Math.Sqrt(Math.Pow(Math.Abs(p1.X - p2.X), 2) + Math.Pow(Math.Abs(p1.Y - p2.Y), 2));
         }
+        public void MakeBezier()
+        {
+            var tmp = points.Find(pt => pt.Point.Value == first.Point.Value);
+            var tmp2 = points.Find(pt => pt.Point.Value == second.Point.Value);
+            SkewedEdge edge = new SkewedEdge(toCurved.Start, toCurved.End, tmp, tmp2);
+            edges.Remove(toCurved);
+            edges.Add(edge);
+            bezier = false;
+            toCurved = null;
+            first.Point = second.Point = null;
+            AddG1Constraint(edge.Start);
+            AddG1Constraint(edge.End);
+        }
 
         public void LengthConstraint(double length, Edge edge)
         {
@@ -756,12 +869,13 @@ namespace gk_1
                 // hoveredEdge.End = new Point((int)newEndX, (int)newEndY);
                 MyPoint newEnd = new MyPoint((int)newEndX, (int)newEndY);
                 MovePoint(edge.End, newEnd);
-                edge.FixedLength = length;
-                edge.Start.Fixed = true;
-                edge.End.Fixed = true;
-                this.Invalidate();
             }
+            edge.FixedLength = length;
+            edge.Start.Fixed = true;
+            edge.End.Fixed = true;
+            this.Invalidate();
         }
+        
 
         private void pomocToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -848,7 +962,7 @@ namespace gk_1
             Point p2 = edge.Second.Point.Value;
             Point p3 = edge.End.Point.Value;
             int steps = (int)Math.Sqrt(Math.Pow(Math.Abs(edge.Start.Point.Value.X - edge.End.Point.Value.X), 2)
-                + Math.Pow(Math.Abs(edge.Start.Point.Value.Y - edge.End.Point.Value.Y), 2)) * 2;
+                + Math.Pow(Math.Abs(edge.Start.Point.Value.Y - edge.End.Point.Value.Y), 2));
             PointF prevPoint = p0;
 
             for (int i = 1; i <= steps; i++)
@@ -981,7 +1095,6 @@ namespace gk_1
                 var pt = (edge.Start.G1 || edge.Start.C1) ? edge.Start : edge.End;
                 var skewed = (SkewedEdge)edges.Find(ed => (ed.Start == pt || ed.End == pt) && ed is SkewedEdge);
                 var control = pt == skewed.Start ? skewed.First : skewed.Second;
-                //MovePoint(control, new MyPoint(new Random().Next(700), new Random().Next(300)));
 
             }
             this.Invalidate();
@@ -1015,8 +1128,6 @@ namespace gk_1
                 var pt = (edge.Start.G1 || edge.Start.C1) ? edge.Start : edge.End;
                 var skewed = (SkewedEdge)edges.Find(ed => (ed.Start == pt || ed.End == pt) && ed is SkewedEdge);
                 var control = pt == skewed.Start ? skewed.First : skewed.Second;
-                //MovePoint(control, new MyPoint(new Random().Next(700), new Random().Next(300)));
-                
             }
             this.Invalidate();
         }
@@ -1053,6 +1164,15 @@ namespace gk_1
             if (adj.Count < 2)
             {
                 MessageBox.Show("Can't add constraint!");
+                return;
+            }
+            if (adj[0] is SkewedEdge first && adj[1] is SkewedEdge second)
+            {
+                var control_1 = point == first.Start ? first.First : second.First;
+                var control_2 = point == first.End ? first.Second : second.Second;
+                MakePointColinear(control_2, point, control_1);
+                control_1.G1 = control_2.G1 = true;
+                this.Invalidate();
                 return;
             }
             Edge ed = adj[0] is SkewedEdge ? adj[1] : adj[0];
@@ -1118,15 +1238,28 @@ namespace gk_1
                 MessageBox.Show("Can't add constraint!");
                 return;
             }
-            Edge ed = adj[0] is SkewedEdge ? adj[1] : adj[0];
-            SkewedEdge skewed = (SkewedEdge)(adj[0] is SkewedEdge ? adj[0] : adj[1]);
-            MyPoint controlPointToChange = point == skewed.Start ? skewed.First : skewed.Second;
-            MyPoint edgePoint = point == ed.Start ? ed.End : ed.Start;
-            //edgePoint.G1 = true;
-            MakePointColinear(edgePoint, point, controlPointToChange, Distance((Point)edgePoint.Point, (Point)point.Point) / 3);
-            ed.C1 = true;
-            controlPointToChange.C1 = true;
-            this.Invalidate();
+            if (adj[0] is SkewedEdge first && adj[1] is SkewedEdge second)
+            {
+                var control_1 = point == first.Start ? first.First : second.First;
+                var control_2 = point == first.End ? first.Second : second.Second;
+                MakePointColinear(control_2, point, control_1, Distance((Point)control_2.Point, (Point)point.Point));
+                control_1.G1 = control_2.G1 = true;
+                this.Invalidate();
+                return;
+            }
+            try
+            {
+                Edge ed = adj[0] is SkewedEdge ? adj[1] : adj[0];
+                SkewedEdge skewed = (SkewedEdge)(adj[0] is SkewedEdge ? adj[0] : adj[1]);
+                MyPoint controlPointToChange = point == skewed.Start ? skewed.First : skewed.Second;
+                MyPoint edgePoint = point == ed.Start ? ed.End : ed.Start;
+                //edgePoint.G1 = true;
+                MakePointColinear(edgePoint, point, controlPointToChange, Distance((Point)edgePoint.Point, (Point)point.Point) / 3);
+                ed.C1 = true;
+                controlPointToChange.C1 = true;
+                this.Invalidate();
+            }
+            catch(Exception) { MessageBox.Show("Can't add constraint!"); }
 
         }
         public void RemoveC1Constraint(MyPoint point)
@@ -1177,8 +1310,39 @@ namespace gk_1
                     Distance((Point)end.Point, (Point)start.Point) / 3);
             }
         }
+        public void DropContinuity(MyPoint point)
+        {
+            var adj = FindAdjacentEdges((Point)point.Point);
+            point.C1 = point.G1 = false;
+            foreach (var edge in adj)
+            {
+                var otherPoint = edge.Start == point ? edge.End : edge.Start;
+                if (!otherPoint.C1)
+                    edge.C1 = false;
+                if (!otherPoint.G1)
+                    edge.G1 = false;
+                if (edge is SkewedEdge skewed)
+                {
+                    var control = point == skewed.Start ? skewed.First : skewed.Second;
+                    control.Direction = null;
+                    control.C1 = control.G1 = false;
+                }
+            }
+        }
+        public void DropBezier(Edge edge)
+        {
+            var tmp = edge as SkewedEdge;
+            points.Remove(tmp.First);
+            points.Remove(tmp.Second);
+            edges.Remove(tmp);
+            var _new = new Edge(edge.Start, edge.End);
+            _new.G1 = _new.C1 = false;
+            edges.Add(_new);
+            
+        }
     }
 }
+
 
 
 

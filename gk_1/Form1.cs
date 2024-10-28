@@ -18,7 +18,7 @@ namespace gk_1
         }
         private void pomocToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            Help.ShowHelp(this, "C:\\Users\\andrz\\source\\repos\\gk_1\\gk_1\\bin\\Debug\\net8.0-windows\\help.html");
+            Help.ShowHelp(this, Directory.GetCurrentDirectory() + "\\help.html");
         }
         private void usunWielokatToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -42,8 +42,15 @@ namespace gk_1
                 MessageBox.Show("Unable to perform due to constraints!");
                 return;
             }
-            customPanel1.bezier = true;
-            customPanel1.toCurved = customPanel1.hoveredEdge;
+            if (customPanel1.hoveredEdge is not SkewedEdge)
+            {
+                customPanel1.bezier = true;
+                customPanel1.toCurved = customPanel1.hoveredEdge;
+            }
+            else
+            {
+                customPanel1.DropBezier(customPanel1.hoveredEdge);
+            }
         }
 
         private void addConstraintToolStripMenuItem_Click(object sender, EventArgs e)
@@ -98,7 +105,7 @@ namespace gk_1
                 string? length = ShowTextInsertionWindow();
                 customPanel1.LengthConstraint(Convert.ToDouble(length), customPanel1.hoveredEdge);
             }
-            else 
+            else
             {
                 customPanel1.DropLengthConstraint(customPanel1.hoveredEdge);
             }
@@ -176,7 +183,7 @@ namespace gk_1
         private void g1ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var tmp = customPanel1.points.Find(pt => pt.Point == customPanel1.hoveredPoint);
-            if (tmp == null) MessageBox.Show("Choose point first!"); 
+            if (tmp == null) MessageBox.Show("Choose point first!");
             if (!tmp.G1)
                 customPanel1.AddG1Constraint(tmp);
             else
@@ -186,10 +193,28 @@ namespace gk_1
         private void c0ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var tmp = customPanel1.points.Find(pt => pt.Point == customPanel1.hoveredPoint);
+            if (tmp == null) MessageBox.Show("Choose point first!");
             if (!tmp.C1)
                 customPanel1.AddC1Constraint(tmp);
             else
                 customPanel1.RemoveC1Constraint(tmp);
+        }
+
+        private void g0ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var tmp = customPanel1.points.Find(pt => pt.Point == customPanel1.hoveredPoint);
+            if (tmp == null) MessageBox.Show("Choose point first!");
+            customPanel1.DropContinuity(tmp);
+        }
+
+        private void movePolygonToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            customPanel1.moving = true;
+        }
+
+        private void algorithmExplanationToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Help.ShowHelp(this, Directory.GetCurrentDirectory() + "\\algorithm.html");
         }
     }
 }
