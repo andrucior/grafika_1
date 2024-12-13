@@ -57,8 +57,7 @@ namespace gk_1
             first = new MyPoint();
             second = new MyPoint();
             
-            vertical = Image.FromFile("C:\\Users\\andrz\\source\\repos\\gk_1\\gk_1\\bin\\Debug\\net8.0-windows" + "\\resources\\_vertical.png");
-            horizontal = Image.FromFile("C:\\Users\\andrz\\source\\repos\\gk_1\\gk_1\\bin\\Debug\\net8.0-windows" + "\\resources\\_horizontal.png");
+            
             MakePredefinedScene();
         }
         public void UpdateFirstControlPoint(Point e)
@@ -167,6 +166,8 @@ namespace gk_1
         }
         private void MakePredefinedScene()
         {
+            vertical = Image.FromFile(".\\resources\\_vertical.png");
+            horizontal = Image.FromFile(".\\resources\\_horizontal.png");
             AddPoint(new Point { X = 256, Y = 97 });
             AddPoint(new Point { X = 312, Y = 67 });
             AddPoint(new Point { X = 513, Y = 115 });
@@ -251,8 +252,6 @@ namespace gk_1
 
         private void AddPoint(Point newPoint)
         {
-
-
             // Check if the user clicked near the first point to close the polygon.
             if (points.Count > 2 && IsPointNearLocation((Point)points[0].Point, newPoint))
             {
@@ -272,7 +271,7 @@ namespace gk_1
             hoveredPoint = points[^1].Point;
             points[^1].Hovered = true;
 
-            var fs = new StreamWriter(Directory.GetCurrentDirectory() + "\\gowno.txt", true);
+            var fs = new StreamWriter(".\\save.txt", true);
             fs.WriteLine(points[^1].Point.ToString());
             fs.Close();
             this.Invalidate(); // Redraw the form to display the updated polygon.
