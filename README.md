@@ -1,10 +1,9 @@
-Polygon/Bezier Curve Editor
+**Polygon Editor**
 
 **Introduction**
 This repository contains the implementation of a polygon/bezier curve editor, designed to facilitate the creation, editing, and management of polygonal and Bezier curves in a 2D space. The editor focuses on intuitive operations and supports constraints, such as horizontal, vertical edges, and specific segment lengths, while maintaining G0, G1, and C1 continuity.
 
 The editor has the following key features:
-
 Polygon Operations:
 Adding a new polygon.
 Deleting a polygon.
@@ -20,7 +19,7 @@ Edge Constraints:
 Horizontal, vertical constraints.
 Fixed edge length.
 Maximum one constraint per edge.
-Two adjacent edges cannot both be horizontal or both vertical.
+Two adjacent edges cannot both be horizontal or vertical.
 
 Visibility of Constraints:
 Constraints are displayed as icons on the corresponding edge.
