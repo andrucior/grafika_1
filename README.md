@@ -1,4 +1,5 @@
-Polygon/Bezier Curve Editor 
+Polygon/Bezier Curve Editor
+
 **Introduction**
 This repository contains the implementation of a polygon/bezier curve editor, designed to facilitate the creation, editing, and management of polygonal and Bezier curves in a 2D space. The editor focuses on intuitive operations and supports constraints, such as horizontal, vertical edges, and specific segment lengths, while maintaining G0, G1, and C1 continuity.
 
